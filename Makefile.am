@@ -5,9 +5,18 @@ SUBDIRS = include src . tests
 
 EXTRA_DIST = Changes ReadMe.md License CMakeLists.txt doc/doxygen.cfg
 
-LIBYAML_TEST_SUITE_RUN_REPO_DEFAULT := https://github.com/yaml/libyaml
-LIBYAML_TEST_SUITE_RUN_REPO ?= $(LIBYAML_TEST_SUITE_RUN_REPO_DEFAULT)
-LIBYAML_TEST_SUITE_RUN_BRANCH ?= run-test-suite
+export LIBYAML_ROOT := $(PWD)
+
+LIBYAML_TEST_REPO ?= https://github.com/yaml/libyaml-test
+LIBYAML_TEST_COMMIT ?= 1f1b00ab6763647d05e44200b63fa62f1d2269a3
+
+# XXX
+LIBYAML_TEST_REPO := https://github.com/yaml/libyaml-test
+LIBYAML_TEST_COMMIT := origin/master
+
+# NOTE: Uncomment to use a local copy of libyaml-test
+#   LIBYAML_TEST_REPO := ../libyaml-test/.git
+#   LIBYAML_TEST_COMMIT := master
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = yaml-0.1.pc
@@ -17,38 +26,33 @@ maintainer-clean-local:
 	-find ${builddir} -name Makefile.in -exec rm -f '{}' ';'
 
 distclean-local:
-	rm -fr tests/run-test-suite packaging
+	rm -fr libyaml-test packaging
 	-git worktree prune
 
-.PHONY: bootstrap
+.PHONY: bootstrap libyaml-test
 bootstrap: maintainer-clean
 	./bootstrap
 	./configure
 	make
 
+test-all: test test-suite
+
 test: all
 	make -C tests check-TESTS
 
-test-suite: tests/run-test-suite all
-	make -C $< test
+test-suite: libyaml-test all
+	make -C $< $@
 
-test-all: test test-suite
-
-tests/run-test-suite:
-ifeq ($(LIBYAML_TEST_SUITE_RUN_REPO),$(LIBYAML_TEST_SUITE_RUN_REPO_DEFAULT))
-	  -git branch --track $(LIBYAML_TEST_SUITE_RUN_BRANCH) origin/$(LIBYAML_TEST_SUITE_RUN_BRANCH)
-	  -git worktree prune
-	  git worktree add $@ $(LIBYAML_TEST_SUITE_RUN_BRANCH)
-    else
-	  git clone --branch $(LIBYAML_TEST_SUITE_RUN_BRANCH) $(LIBYAML_TEST_SUITE_RUN_REPO) $@
-    endif
-
-packaging:
-	-git branch --track $@ origin/$@
-	git worktree add --force $@ $@
+libyaml-test:
+	-git clone $(LIBYAML_TEST_REPO) $@
+	( cd $@ && git reset --hard $(LIBYAML_TEST_COMMIT) )
 
 docker-dist: packaging
 	make -C $</docker libyaml-dist
 
 docker-test-pyyaml: packaging
 	make -C $</docker test-pyyaml
+
+packaging:
+	-git branch --track $@ origin/$@
+	git worktree add --force $@ $@
